@@ -13,10 +13,10 @@ def get_upcoming_trains(feed, stop_id, num_trains=NUM_TRAINS):
     upcoming = []
     for trip in feed.trips:
         for update in trip.stop_time_updates:
-            if update.stop_id == stop_id and update.arrival > now:
+            if update.stop_id == stop_id and update.arrival and update.arrival > now:
                 upcoming.append({
                     "arrival_time": update.arrival.isoformat(),
-                    "destination": trip.trip_headsign,
+                    "destination": trip.headsign_text,  # Correct!
                     "direction": trip.direction
                 })
     upcoming.sort(key=lambda x: x["arrival_time"])
