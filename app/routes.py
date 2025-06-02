@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify
+from flask import Response, json
 from nyct_gtfs import NYCTFeed
 from datetime import datetime
 
@@ -26,6 +27,16 @@ def get_upcoming_trains(feed, stop_id, num_trains=NUM_TRAINS):
 def next_trains():
     try:
         feed.refresh()
-        return jsonify({d: get_upcoming_trains(feed, stop) for d, stop in STOP_IDS["Q"].items()})
+        data = {d: get_upcoming_trains(feed, stop) for d, stop in STOP_IDS["Q"].items()}
+        response = Response(json.dumps(data), mimetype='application/json')
+        response.headers['Content-Type'] = 'application/json'
+        response.headers['Content-Length'] = str(len(response.get_data()))
+        response.headers['Connection'] = 'close'  # Force close to avoid keep-alive issues
+        return response
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        error_data = {"error": str(e)}
+        response = Response(json.dumps(error_data), mimetype='application/json')
+        response.headers['Content-Type'] = 'application/json'
+        response.headers['Content-Length'] = str(len(response.get_data()))
+        response.headers['Connection'] = 'close'
+        return response, 500
