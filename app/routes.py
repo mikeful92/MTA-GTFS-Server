@@ -1,5 +1,4 @@
-from flask import Blueprint, jsonify
-from flask import Response, json
+from flask import Blueprint, jsonify, request
 from nyct_gtfs import NYCTFeed
 from datetime import datetime
 
@@ -17,7 +16,7 @@ def get_upcoming_trains(feed, stop_id, num_trains=NUM_TRAINS):
             if update.stop_id == stop_id and update.arrival and update.arrival > now:
                 upcoming.append({
                     "arrival_time": update.arrival.isoformat(),
-                    "destination": trip.headsign_text,  # Correct!
+                    "destination": trip.headsign_text,
                     "direction": trip.direction
                 })
     upcoming.sort(key=lambda x: x["arrival_time"])
@@ -28,15 +27,6 @@ def next_trains():
     try:
         feed.refresh()
         data = {d: get_upcoming_trains(feed, stop) for d, stop in STOP_IDS["Q"].items()}
-        response = Response(json.dumps(data), mimetype='application/json')
-        response.headers['Content-Type'] = 'application/json'
-        response.headers['Content-Length'] = str(len(response.get_data()))
-        response.headers['Connection'] = 'close'  # Force close to avoid keep-alive issues
-        return response
+        return jsonify(data)
     except Exception as e:
-        error_data = {"error": str(e)}
-        response = Response(json.dumps(error_data), mimetype='application/json')
-        response.headers['Content-Type'] = 'application/json'
-        response.headers['Content-Length'] = str(len(response.get_data()))
-        response.headers['Connection'] = 'close'
-        return response, 500
+        return jsonify({"error": str(e)}), 500
