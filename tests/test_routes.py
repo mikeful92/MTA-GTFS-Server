@@ -17,35 +17,32 @@ def test_next_trains_endpoint(client):
     assert response.status_code == 200
     json_data = response.get_json()
     assert isinstance(json_data, dict)
-    assert 'N' in json_data or 'S' in json_data or 'error' in json_data
+    assert "Q_S" in json_data
+    assert "6_S" in json_data
 
 def test_next_trains_format(client):
     response = client.get('/next_trains')
     assert response.status_code == 200
-
     json_data = response.get_json()
-    assert isinstance(json_data, dict)
 
-    # Check that the response contains 'N' and/or 'S'
-    assert any(key in json_data for key in ('N', 'S'))
-
-    for direction, trains in json_data.items():
-        assert direction in ('N', 'S')
+    for key in ("Q_S", "6_S"):
+        assert key in json_data
+        trains = json_data[key]
         assert isinstance(trains, list)
 
+        last_minutes = -1
         for train in trains:
             assert isinstance(train, dict)
-            assert 'arrival_time' in train
-            assert 'destination' in train
-            assert 'direction' in train
+            assert "minutes_until" in train
+            assert "destination" in train
+            assert "direction" in train
 
-            # Validate format of arrival_time
-            from datetime import datetime
-            arrival_time = train['arrival_time']
-            try:
-                datetime.fromisoformat(arrival_time)
-            except ValueError:
-                pytest.fail(f"Invalid ISO 8601 format: {arrival_time}")
+            # ✅ NEW: check that time is non-negative and ascending
+            minutes = train["minutes_until"]
+            assert isinstance(minutes, int)
+            assert minutes >= 0
+            assert minutes >= last_minutes
+            last_minutes = minutes
 
-            assert train['direction'] in ('N', 'S')
-            assert isinstance(train['destination'], str)
+            assert isinstance(train["destination"], str)
+            assert train["direction"] == "S"  # Only southbound expected
