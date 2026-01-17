@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 import os
 import json
 
+from app.alerts import get_alerts_status
+
 bp = Blueprint("main", __name__)
 
 # Stop IDs
@@ -49,22 +51,18 @@ def build_output():
             output[key] = get_upcoming_trains(feed, stop_id)
     return output
 
-def build_response_payload(output, now, is_stale):
+def build_response_payload(output, now, is_stale, status):
     cache_age_s = 0
     if LAST_RESPONSE_AT:
         cache_age_s = int((now - LAST_RESPONSE_AT).total_seconds())
 
-    badge = "UNK" if is_stale else "OT"
     payload = {
         "meta": {
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             "cache_age_s": cache_age_s,
             "is_stale": is_stale,
         },
-        "status": {
-            "Q": {"badge": badge},
-            "6": {"badge": badge},
-        },
+        "status": status,
     }
     payload.update(output)
     return payload
@@ -107,9 +105,10 @@ def next_trains():
 
         # Build output only for southbound directions
         output = build_output()
+        status = get_alerts_status(now)
         LAST_RESPONSE_DATA = output
         LAST_RESPONSE_AT = now
-        response_payload = build_response_payload(output, now, False)
+        response_payload = build_response_payload(output, now, False, status)
         response_data = json.dumps(response_payload)
 
         # Build proper JSON response
@@ -125,7 +124,8 @@ def next_trains():
     except Exception as e:
         if LAST_RESPONSE_DATA:
             now = datetime.now()
-            response_payload = build_response_payload(LAST_RESPONSE_DATA, now, True)
+            status = get_alerts_status(now)
+            response_payload = build_response_payload(LAST_RESPONSE_DATA, now, True, status)
             response_data = json.dumps(response_payload)
             response = Response(response_data, content_type="application/json")
             response.headers["Content-Length"] = str(len(response_data))

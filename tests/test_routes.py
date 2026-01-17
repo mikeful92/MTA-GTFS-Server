@@ -56,7 +56,7 @@ def test_next_trains_format(client):
         json_data["status"]["Q"]["badge"],
         json_data["status"]["6"]["badge"],
     }
-    assert badges.issubset({"OT", "UNK"})
+    assert badges.issubset({"OT", "DLY", "CHG", "PLN", "UNK"})
 
 def test_health_endpoint(client):
     response = client.get('/health')
