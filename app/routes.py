@@ -1,6 +1,6 @@
 from flask import Blueprint, Response, redirect
 from nyct_gtfs import NYCTFeed
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import json
 
@@ -57,7 +57,7 @@ def build_response_payload(output, now, is_stale):
     badge = "UNK" if is_stale else "OT"
     payload = {
         "meta": {
-            "generated_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             "cache_age_s": cache_age_s,
             "is_stale": is_stale,
         },
