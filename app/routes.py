@@ -1,6 +1,7 @@
 from flask import Blueprint, Response
 from nyct_gtfs import NYCTFeed
 from datetime import datetime, timedelta
+import os
 import json
 
 bp = Blueprint("main", __name__)
@@ -11,7 +12,7 @@ STOP_IDS = {
     "6": {"S": "627S"}      # 103rd St
 }
 
-NUM_TRAINS = 3
+NUM_TRAINS = int(os.getenv("NUM_TRAINS", "8"))
 
 # Load both feeds
 FEEDS = {
