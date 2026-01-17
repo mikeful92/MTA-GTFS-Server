@@ -17,6 +17,8 @@ def test_next_trains_endpoint(client):
     assert response.status_code == 200
     json_data = response.get_json()
     assert isinstance(json_data, dict)
+    assert "meta" in json_data
+    assert "status" in json_data
     assert "Q_S" in json_data
     assert "Q_N" in json_data
     assert "6_S" in json_data
@@ -49,6 +51,12 @@ def test_next_trains_format(client):
 
             assert isinstance(train["destination"], str)
             assert train["direction"] == expected_direction
+
+    badges = {
+        json_data["status"]["Q"]["badge"],
+        json_data["status"]["6"]["badge"],
+    }
+    assert badges.issubset({"OT", "UNK"})
 
 def test_health_endpoint(client):
     response = client.get('/health')

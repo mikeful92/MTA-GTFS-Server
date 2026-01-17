@@ -22,7 +22,7 @@ FEEDS = {
 
 REFRESH_TTL = timedelta(seconds=20)
 LAST_REFRESH = datetime.min
-LAST_RESPONSE = None
+LAST_RESPONSE_DATA = None
 LAST_RESPONSE_AT = None
 
 def get_upcoming_trains(feed, stop_id, num_trains=NUM_TRAINS):
@@ -48,6 +48,26 @@ def build_output():
             key = f"{line}_{direction}"
             output[key] = get_upcoming_trains(feed, stop_id)
     return output
+
+def build_response_payload(output, now, is_stale):
+    cache_age_s = 0
+    if LAST_RESPONSE_AT:
+        cache_age_s = int((now - LAST_RESPONSE_AT).total_seconds())
+
+    badge = "UNK" if is_stale else "OT"
+    payload = {
+        "meta": {
+            "generated_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+            "cache_age_s": cache_age_s,
+            "is_stale": is_stale,
+        },
+        "status": {
+            "Q": {"badge": badge},
+            "6": {"badge": badge},
+        },
+    }
+    payload.update(output)
+    return payload
 
 @bp.route("/health")
 def health():
@@ -76,7 +96,7 @@ def index():
 
 @bp.route("/next_trains")
 def next_trains():
-    global LAST_REFRESH, LAST_RESPONSE, LAST_RESPONSE_AT
+    global LAST_REFRESH, LAST_RESPONSE_DATA, LAST_RESPONSE_AT
 
     try:
         now = datetime.now()
@@ -87,12 +107,14 @@ def next_trains():
 
         # Build output only for southbound directions
         output = build_output()
-        LAST_RESPONSE = json.dumps(output)
+        LAST_RESPONSE_DATA = output
         LAST_RESPONSE_AT = now
+        response_payload = build_response_payload(output, now, False)
+        response_data = json.dumps(response_payload)
 
         # Build proper JSON response
-        response = Response(LAST_RESPONSE, content_type="application/json")
-        response.headers["Content-Length"] = str(len(LAST_RESPONSE))
+        response = Response(response_data, content_type="application/json")
+        response.headers["Content-Length"] = str(len(response_data))
         response.headers["Connection"] = "close"
         response.headers["Content-Encoding"] = "identity"
         response.headers["Cache-Control"] = "no-store"
@@ -101,15 +123,18 @@ def next_trains():
         return response
 
     except Exception as e:
-        if LAST_RESPONSE:
-            response = Response(LAST_RESPONSE, content_type="application/json")
-            response.headers["Content-Length"] = str(len(LAST_RESPONSE))
+        if LAST_RESPONSE_DATA:
+            now = datetime.now()
+            response_payload = build_response_payload(LAST_RESPONSE_DATA, now, True)
+            response_data = json.dumps(response_payload)
+            response = Response(response_data, content_type="application/json")
+            response.headers["Content-Length"] = str(len(response_data))
             response.headers["Connection"] = "close"
             response.headers["Content-Encoding"] = "identity"
             response.headers["Cache-Control"] = "no-store"
             response.headers["X-Cache"] = "stale"
             response.headers["X-Cache-Age-Seconds"] = str(
-                int((datetime.now() - LAST_RESPONSE_AT).total_seconds())
+                int((now - LAST_RESPONSE_AT).total_seconds())
             )
             response.direct_passthrough = False
             return response, 200
