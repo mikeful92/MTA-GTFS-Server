@@ -46,3 +46,12 @@ def test_next_trains_format(client):
 
             assert isinstance(train["destination"], str)
             assert train["direction"] == "S"  # Only southbound expected
+
+def test_health_endpoint(client):
+    response = client.get('/health')
+    assert response.status_code == 200
+    json_data = response.get_json()
+    assert isinstance(json_data, dict)
+    assert json_data.get("status") == "ok"
+    assert "cache_age_seconds" in json_data
+    assert "last_refresh" in json_data
