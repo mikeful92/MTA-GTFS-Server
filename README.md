@@ -1,120 +1,192 @@
 # MTA GTFS Flask Server
 
-A small Flask service that provides real-time next-train arrivals and per-line service status badges for the MTA Q and 6 lines. It uses the `nyct-gtfs` library for GTFS-RT trip updates and a separate GTFS-RT Service Alerts feed to summarize line status.
+## What this is
+A small Flask service that provides real-time next-train arrivals and per-line status for the MTA Q and 6 lines.
 
-## Features
-- `/next_trains` endpoint returns arrivals for Q and 6 (N/S directions) plus status badges.
-- In-memory caching for arrivals with a short TTL and stale fallback on upstream errors.
-- Separate in-memory caching for Service Alerts with its own TTL, retry/backoff, and stale fallback.
-- `/health` endpoint for lightweight liveness and cache age checks.
+Endpoints:
+- `/next_trains`: arrivals plus status badges
+- `/health`: cache/refresh status
+- `/`: redirects to `/health`
+
+Caching strategy:
+- Arrivals cache TTL: 20 seconds, with stale fallback on upstream errors.
+- Alerts cache TTL: `ALERTS_TTL_S` (default 120 seconds), with stale fallback if alerts fetch fails.
 
 ## API
 
 ### GET /next_trains
-Returns upcoming train arrivals plus a per-line status summary.
-
-Response shape:
+Example response shape:
 ```
 {
   "meta": {
-    "generated_at": "ISO-8601 UTC",
+    "generated_at": "2026-01-17T19:58:30Z",
     "cache_age_s": 0,
     "is_stale": false
   },
   "status": {
-    "Q": {"badge": "OT|DLY|CHG|PLN|UNK", "reason": "optional <= 40 chars"},
-    "6": {"badge": "OT|DLY|CHG|PLN|UNK", "reason": "optional <= 40 chars"}
+    "Q": {"badge": "OT", "reason": "optional <= 40 chars"},
+    "6": {"badge": "DLY", "reason": "optional <= 40 chars"}
   },
-  "Q_S": [{"destination": "...", "direction": "S", "minutes_until": 12}, ...],
-  "Q_N": [...],
-  "6_S": [...],
-  "6_N": [...]
+  "Q_S": [{"destination": "...", "direction": "S", "minutes_until": 12}],
+  "Q_N": [{"destination": "...", "direction": "N", "minutes_until": 5}],
+  "6_S": [{"destination": "...", "direction": "S", "minutes_until": 3}],
+  "6_N": [{"destination": "...", "direction": "N", "minutes_until": 10}]
 }
 ```
 
-Badge meanings:
+Status badges:
 - `OT`: on time (no relevant alerts)
 - `DLY`: delays or disruptions
 - `CHG`: service change, reroute, bypass, or skip
 - `PLN`: planned work or maintenance
 - `UNK`: status unknown (alerts unavailable)
 
-Notes:
-- `meta.cache_age_s` reflects the age of the cached arrivals payload (if available).
-- `meta.is_stale` is `true` when serving cached arrivals due to an upstream error.
-- `status.*.reason` is optional and truncated to 40 characters.
+Meta fields:
+- `generated_at`: ISO-8601 UTC timestamp
+- `cache_age_s`: age of cached arrivals payload in seconds (0 if none)
+- `is_stale`: `true` when serving cached arrivals due to an error
 
 ### GET /health
-Returns server health and cache metadata.
+Returns cache age and last refresh time.
 
-Response shape:
+## Local development (WSL/Linux/macOS)
+
+PythonAnywhere max Python version is 3.10. Use Python 3.10 locally for consistency.
+
+Clone and install:
 ```
-{
-  "status": "ok",
-  "cache_age_seconds": 0,
-  "last_refresh": "ISO-8601 or null"
-}
-```
-
-## Caching and Refresh Behavior
-
-### Arrivals cache
-- Cached in memory with a refresh TTL (currently 20 seconds).
-- If the upstream refresh fails, the server returns the last cached arrivals and marks the response as stale.
-
-### Service Alerts cache
-- Cached in memory with `ALERTS_TTL_S` (default 120 seconds).
-- One retry with a small backoff (0.5s) and a 4s request timeout.
-- If fetch fails, cached alerts are used when available; otherwise status becomes `UNK`.
-
-## Configuration
-
-Environment variables:
-- `NUM_TRAINS` (default `8`): number of upcoming trains per direction.
-- `ALERTS_TTL_S` (default `120`): Service Alerts cache TTL in seconds.
-- `MTA_ALERTS_URL` (optional): override the Service Alerts GTFS-RT URL.
-
-Defaults:
-- Service Alerts URL: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts`
-
-## Setup
-
-1) Clone the repo
-2) Create a virtual environment and install requirements
-```
-python -m venv venv
+git clone <repo-url>
+cd MTA-GTFS-Server
+python3.10 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Running Locally
-
+Run locally:
 ```
-export NUM_TRAINS=8
+source venv/bin/activate
 python run.py
 ```
 
-The server will start on the default Flask host/port (see `run.py`).
-
-## Testing
-
+Run tests:
 ```
 source venv/bin/activate
 pytest -v
 ```
 
-Tests do not require live network calls; alerts fetches are mocked in unit tests.
+Tests should not require network access. If they do, mock the network or ensure the alerts fetch is patched in tests.
 
-## Project Structure
-- `app/routes.py`: Flask routes and arrivals caching
-- `app/alerts.py`: Service Alerts fetch, caching, and status computation
-- `app/helpers/line_status_utils.py`: helper utilities (unused by default)
-- `tests/`: pytest suite
+Example local verification:
+```
+curl -s http://127.0.0.1:5000/health
+curl -s http://127.0.0.1:5000/next_trains | head -c 400
+```
 
-## Notes
-- This service targets PythonAnywhere; keep Python version compatibility in mind.
-- Network failures should never break `/next_trains`; at worst, status becomes `UNK`.
+## Configuration (Environment variables)
 
-## License
+| Name | Default | Purpose | Example |
+| --- | --- | --- | --- |
+| `NUM_TRAINS` | `8` | Number of upcoming trains per direction | `NUM_TRAINS=6` |
+| `ALERTS_TTL_S` | `120` | Alerts cache TTL in seconds | `ALERTS_TTL_S=180` |
+| `MTA_ALERTS_URL` | default Service Alerts URL | Override alerts feed URL | `MTA_ALERTS_URL=https://...` |
 
-Add license information here if applicable.
+Arrivals cache TTL is currently a constant in code (20 seconds).
+
+If you use an MTA API key in your environment, set it in the Web tab on PythonAnywhere (name it per your WSGI/config usage). If no key is required, leave unset.
+
+## Deployment on PythonAnywhere (step-by-step runbook)
+
+1) Log in to PythonAnywhere
+- Go to https://www.pythonanywhere.com and open your Dashboard.
+
+2) Open a Bash console
+- Dashboard → “Consoles” → “Bash”.
+
+3) Locate the project directory
+- Typical path: `/home/<username>/MTA-GTFS-Server`
+- If unsure:
+```
+ls ~/
+```
+
+4) Update code
+```
+cd /home/<username>/MTA-GTFS-Server
+git status
+git pull
+```
+
+5) Create or reuse a virtualenv (Python 3.10)
+```
+python3.10 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+6) Set environment variables
+- Go to the Web tab → “Environment variables”.
+- Add/edit `NUM_TRAINS`, `ALERTS_TTL_S`, `MTA_ALERTS_URL` as needed.
+- If you use an API key, set it here as well.
+
+7) Reload the web app
+- Web tab → click “Reload”.
+
+8) Verify deployment
+From PythonAnywhere Bash:
+```
+curl -s https://mikeful92.pythonanywhere.com/health
+curl -s https://mikeful92.pythonanywhere.com/next_trains | head -c 400
+```
+From your local machine:
+```
+curl -s https://mikeful92.pythonanywhere.com/health
+curl -s https://mikeful92.pythonanywhere.com/next_trains | head -c 400
+```
+Healthy looks like:
+- `/health` returns `{"status":"ok", ...}`
+- `/next_trains` returns JSON with `meta`, `status`, `Q_S`, `Q_N`, `6_S`, `6_N`
+
+### Common update routine
+1) Open PythonAnywhere Bash console
+2) `cd /home/<username>/MTA-GTFS-Server`
+3) `git status` and `git pull`
+4) `source venv/bin/activate`
+5) `pip install -r requirements.txt`
+6) Update env vars in Web tab if needed
+7) Web tab → Reload
+8) `curl -s https://mikeful92.pythonanywhere.com/health`
+
+## Troubleshooting
+
+### /next_trains returns 500
+- Check logs: Web tab → “Logs” → error log and server log.
+- Look for stack traces referencing `app/routes.py` or alerts fetch.
+
+### MTA endpoint not reachable / DNS issues
+- Server returns cached arrivals when available.
+- `status` badges become `UNK` if alerts cannot be fetched and no cached alerts exist.
+- Check error log for DNS or connection errors.
+
+### Changes not showing up
+- Confirm you pulled the right branch.
+- Confirm you are in `/home/<username>/MTA-GTFS-Server`.
+- Web tab → click “Reload”.
+
+### Alerts show UNK
+- Alerts feed unreachable or did not match route IDs.
+- Check error log for alerts fetch failures.
+- Confirm `MTA_ALERTS_URL` and network access.
+
+### Cache age is high / is_stale=true
+- Upstream refresh failed or network is blocked.
+- Check Web tab logs for exceptions.
+
+## Maintenance
+- Rotate keys: update environment variables in the Web tab.
+- Update dependencies: `pip install -r requirements.txt` after bumping versions.
+- Safe rollback:
+```
+cd /home/<username>/MTA-GTFS-Server
+git checkout <previous-commit>
+```
+Then Web tab → Reload.
