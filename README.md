@@ -92,8 +92,6 @@ curl -s http://127.0.0.1:5000/next_trains | head -c 400
 
 Arrivals cache TTL is currently a constant in code (20 seconds).
 
-If you use an MTA API key in your environment, set it in the Web tab on PythonAnywhere (name it per your WSGI/config usage). If no key is required, leave unset.
-
 ## Deployment on PythonAnywhere (step-by-step runbook)
 
 1) Log in to PythonAnywhere
@@ -126,7 +124,6 @@ pip install -r requirements.txt
 6) Set environment variables
 - Go to the Web tab → “Environment variables”.
 - Add/edit `NUM_TRAINS`, `ALERTS_TTL_S`, `MTA_ALERTS_URL` as needed.
-- If you use an API key, set it here as well.
 
 7) Reload the web app
 - Web tab → click “Reload”.
@@ -182,7 +179,7 @@ Healthy looks like:
 - Check Web tab logs for exceptions.
 
 ## Maintenance
-- Rotate keys: update environment variables in the Web tab.
+- Update environment variables in the Web tab.
 - Update dependencies: `pip install -r requirements.txt` after bumping versions.
 - Safe rollback:
 ```
