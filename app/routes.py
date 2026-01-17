@@ -1,4 +1,4 @@
-from flask import Blueprint, Response
+from flask import Blueprint, Response, redirect
 from nyct_gtfs import NYCTFeed
 from datetime import datetime, timedelta
 import os
@@ -6,10 +6,10 @@ import json
 
 bp = Blueprint("main", __name__)
 
-# Southbound stop IDs
+# Stop IDs
 STOP_IDS = {
-    "Q": {"S": "Q03S"},     # 72nd St
-    "6": {"S": "627S"}      # 103rd St
+    "Q": {"S": "Q03S", "N": "Q03N"},     # 72nd St
+    "6": {"S": "627S", "N": "627N"}      # 77th St
 }
 
 NUM_TRAINS = int(os.getenv("NUM_TRAINS", "8"))
@@ -44,9 +44,9 @@ def build_output():
     output = {}
     for line, directions in STOP_IDS.items():
         feed = FEEDS[line]
-        stop_id = directions["S"]
-        key = f"{line}_S"
-        output[key] = get_upcoming_trains(feed, stop_id)
+        for direction, stop_id in directions.items():
+            key = f"{line}_{direction}"
+            output[key] = get_upcoming_trains(feed, stop_id)
     return output
 
 @bp.route("/health")
@@ -69,6 +69,10 @@ def health():
     response.headers["Cache-Control"] = "no-store"
     response.direct_passthrough = False
     return response
+
+@bp.route("/")
+def index():
+    return redirect("/health", code=302)
 
 @bp.route("/next_trains")
 def next_trains():
